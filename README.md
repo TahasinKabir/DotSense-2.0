@@ -200,10 +200,6 @@ The full manual, with every panel, the braille rules, OCR, voice typing, Photo f
 **Team TactiCore (Group 03)** · Department of Computer Science and Engineering, United International University, Dhaka, Bangladesh
 
 - **Tahasin Kabir Rubai** – team lead and app developer · [GitHub](https://github.com/TahasinKabir) · [LinkedIn](https://www.linkedin.com/in/tahasin-kabir)
-- Ata Imam Hossain
-- Md Nasir Khan Naim
-- MD. Shahriar Parvez
-- MD. Eahea
 
 ## License
 

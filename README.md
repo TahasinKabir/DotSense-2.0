@@ -178,7 +178,7 @@ The full manual, with every panel, the braille rules, OCR, voice typing, Photo f
 | *Permission denied* (Linux) | Run `sudo usermod -a -G dialout $USER`, then log out and back in. |
 | No reply from GRBL | Check the baud rate (115200 for GRBL 1.1) and the USB cable. |
 | ALARM | Check the machine, then press **Unlock**. After a limit alarm, set zero again. |
-| The phone cannot open the page | Allow DotSense in Windows Firewall (tick *Public networks* too) and put the phone and the computer on the same Wi-Fi. See [the user guide](docs/USER-GUIDE.md#machine-wifi-and-photo-from-phone). |
+| The phone cannot open the page | Allow DotSense in Windows Firewall (tick *Public networks* too) and put the phone and the computer on the same Wi-Fi. 
 
 ## Limitations
 
@@ -199,7 +199,12 @@ The full manual, with every panel, the braille rules, OCR, voice typing, Photo f
 
 **Team TactiCore (Group 03)** · Department of Computer Science and Engineering, United International University, Dhaka, Bangladesh
 
-- **Tahasin Kabir Rubai** – team lead and app developer · [GitHub](https://github.com/TahasinKabir) · [LinkedIn](https://www.linkedin.com/in/tahasin-kabir)
+- **Tahasin Kabir Rubai** – team lead and app developer · [GitHub]
+- Ata Imam Hossain
+- Md Nasir Khan Naim
+- MD. Shahriar Parvez
+- MD. Eahea
+(https://github.com/TahasinKabir) · [LinkedIn](https://www.linkedin.com/in/tahasin-kabir)
 
 ## License
 

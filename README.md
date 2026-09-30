@@ -1,12 +1,3 @@
-README.md
-build/icon.png
-docs/USER-GUIDE.md
-docs/images/dotsense-printing-light.png
-docs/images/dotsense-printing-dark.png
-core.js, main.js, package.json …
-<div align="center">
-
-<img src="build/icon.png" alt="DotSense logo: a braille cell" width="112">
 
 # DotSense — 3D Braille Printer
 

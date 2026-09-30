@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; media-src 'self' blob:; font-src 'self' data:">
+<title>DotSense</title>
+<link rel="stylesheet" href="styles.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<header class="app-header top-bar" id="appHeader">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 18 26" aria-hidden="true">
+      <circle class="on" cx="4.5" cy="4.5" r="3.2"/><circle class="on" cx="13.5" cy="4.5" r="3.2"/>
+      <circle class="off" cx="4.5" cy="13" r="3"/><circle class="on" cx="13.5" cy="13" r="3.2"/>
+      <circle class="off" cx="4.5" cy="21.5" r="3"/><circle class="off" cx="13.5" cy="21.5" r="3"/>
+    </svg>
+    <h1>DotSense</h1>
+    <!-- WiFi · Text · Page · Preview · Machine setup · Print · About · light/dark -->
+    <nav class="step-nav" aria-label="Parts of the window">
+      <div class="wifi-wrap">
+        <button class="nav-item wifi-btn" id="wifiBtn" type="button" data-state="check" aria-haspopup="true" aria-expanded="false" aria-controls="wifiPop" hidden>
+          <span class="led" aria-hidden="true"></span><span class="pill-k">WiFi</span><span id="wifiText">checking…</span>
+        </button>
+        <div class="wifi-pop" id="wifiPop" role="dialog" aria-labelledby="wifiPopTitle" hidden>
+          <div class="wifi-pop-head">
+            <strong id="wifiPopTitle">Machine WiFi (MKS DLC32)</strong>
+            <button class="btn icon small" type="button" id="wifiPopClose" aria-label="Close">✕</button>
+          </div>
+          <p class="wifi-now" id="wifiNow" role="status"></p>
+          <div class="grid2">
+            <div class="field"><label for="wifiSsid">WiFi name</label><input id="wifiSsid" type="text" maxlength="32" spellcheck="false" autocomplete="off"></div>
+            <div class="field"><label for="wifiPass">Password</label><input id="wifiPass" type="password" maxlength="63" spellcheck="false" autocomplete="off"></div>
+          </div>
+          <label class="check"><input id="wifiShowPass" type="checkbox"> Show password</label>
+          <div class="btnrow">
+            <button class="btn primary" id="wifiConnectBtn" type="button">Connect</button>
+            <button class="btn" id="wifiDefaultsBtn" type="button">Default name and password</button>
+          </div>
+          <p class="error" id="wifiError" hidden></p>
+          <p class="hint">Used for Photo from phone (in Scan text). On the machine's WiFi this computer has no internet unless a cable is plugged in; to go back, pick your usual WiFi in the system WiFi menu. Printing still uses the USB cable.</p>
+        </div>
+      </div>
+      <button class="step-link" type="button" data-step="textPanel" aria-controls="textPanel" aria-current="step">Text</button>
+      <button class="step-link" type="button" data-step="pagePanel" aria-controls="pagePanel">Page</button>
+      <button class="step-link" type="button" data-step="previewPanel" aria-controls="previewPanel">Preview</button>
+      <button class="nav-item" id="setupBtn" type="button" aria-haspopup="dialog" aria-controls="setupPanel" aria-expanded="false">Machine setup</button>
+      <button class="step-link" type="button" data-step="printBar" aria-controls="printBar">Print</button>
+      <button class="nav-item" id="aboutBtn" type="button" aria-haspopup="dialog" aria-controls="aboutPanel" aria-expanded="false">About</button>
+      <button class="nav-item nav-icon theme-btn" id="themeBtn" type="button" aria-label="Switch to light mode" title="Switch to light mode" hidden>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.3M12 19.1v2.3M4.7 4.7l1.6 1.6M17.7 17.7l1.6 1.6M2.6 12h2.3M19.1 12h2.3M4.7 19.3l1.6-1.6M17.7 6.3l1.6-1.6"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.4 14.5A8.4 8.4 0 0 1 9.5 3.6a8.4 8.4 0 1 0 10.9 10.9z"/></svg>
+      </button>
+    </nav>
+  </div>
+  <div class="header-actions">
+    <button class="pill pill-btn" id="machinePill" type="button" data-tone="off" aria-haspopup="dialog" aria-controls="setupPanel" title="The machine (USB). Click for Machine setup › Connection.">
+      <span class="led"></span><span id="machinePillText">Not connected</span>
+    </button>
+    <button class="btn" id="openProjectBtn" type="button">Open…</button>
+    <button class="btn" id="saveProjectBtn" type="button">Save…</button>
+  </div>
+</header>
+
+<main class="layout" id="main">
+  <div class="col">
+    <section class="panel step-panel" id="textPanel" aria-labelledby="textTitle">
+      <div class="panel-head">
+        <h2 id="textTitle" tabindex="-1"><label for="sentence" class="h-label">Text<span class="sr-only"> to punch</span></label></h2>
+        <span id="charCount" class="muted mono count"></span>
+      </div>
+      <div class="editor" id="editor">
+        <div class="editor-marks" id="sentenceMarks" aria-hidden="true"></div>
+        <textarea id="sentence" rows="5" spellcheck="false" placeholder="Type here, use Voice typing, or Scan an image / PDF…"></textarea>
+      </div>
+      <!-- Auto correct: the fixes for one underlined mistake, next to it -->
+      <div class="fix-card" id="fixCard" role="group" aria-labelledby="fixCardWhy" hidden>
+        <p class="fix-card-why" id="fixCardWhy"></p>
+        <div class="fix-card-opts" id="fixCardOpts"></div>
+      </div>
+      <div class="btnrow tools">
+        <div class="seg lang-seg" role="radiogroup" aria-label="Language for voice typing" title="Language for voice typing (Scan reads Bangla and English by itself)">
+          <label><input type="radio" name="inputLang" value="en" checked><span>English</span></label>
+          <label><input type="radio" name="inputLang" value="bn"><span lang="bn">বাংলা</span></label>
+        </div>
+        <button class="btn" id="voiceBtn" type="button" aria-pressed="false" title="Speak and the words are typed at the cursor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          <span id="voiceBtnText">Voice typing</span>
+        </button>
+        <button class="btn" id="fixBtn" type="button" aria-expanded="false" aria-controls="fixBar" title="Auto correct on or off: mistakes in spelling, sentences and punctuation (English and Bangla) are underlined as you type. Click one for its fixes.">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18L7.5 6 12 18M4.7 13.5h5.6"/><path d="M13.5 14.5l3 3 5-7"/></svg>
+          Auto correct
+        </button>
+        <button class="btn" id="ocrBtn" type="button" title="Read printed text from photos, scans or PDF files">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 10h8M8 14h5"/></svg>
+          Scan (OCR)…
+        </button>
+        <button class="btn" id="pageBreakBtn" type="button" title="Start a new sheet at the cursor">Next page</button>
+        <button class="btn" id="clearBtn" type="button" title="Clear all text (Undo brings it back)">Clear</button>
+      </div>
+
+      <div id="voiceBar" class="voicebar" hidden>
+        <div class="voice-row">
+          <span class="rec-dot" aria-hidden="true"></span>
+          <span id="voiceStatus" role="status">Starting…</span>
+          <span class="meter" aria-hidden="true"><span id="voiceLevel"></span></span>
+          <select id="voiceModel" aria-label="Voice model" title="Voice model">
+            <option value="accurate">Accurate · 111 MB</option>
+            <option value="fast">Fast · 30 MB</option>
+            <option value="bangla" lang="bn">বাংলা · 87 MB</option>
+          </select>
+        </div>
+        <div id="voicePartial" class="partial" aria-live="polite"></div>
+        <div id="voiceChoice" class="voice-download" hidden>
+          <p id="voiceChoiceText">Voice typing works offline. It needs a one-time download of a speech model:</p>
+          <div class="btnrow">
+            <button class="btn primary small" type="button" id="dlAccurate">Accurate · 111 MB</button>
+            <button class="btn small" type="button" id="dlFast">Fast · 30 MB</button>
+            <button class="btn primary small" type="button" id="dlBangla" hidden>Download Bangla · 87 MB</button>
+            <button class="btn small" type="button" id="dlCancel">Cancel</button>
+          </div>
+        </div>
+        <div id="voiceProgress" class="mini-bar" hidden><span id="voiceProgressFill"></span></div>
+      </div>
+
+      <div id="fixBar" class="fixbar" hidden>
+        <div class="fix-head">
+          <strong id="fixTitle">Auto correct</strong>
+          <span id="fixStatus" class="muted" role="status"></span>
+          <button class="btn icon small" id="fixClose" type="button" aria-label="Close Auto correct" title="Close Auto correct">✕</button>
+        </div>
+        <div class="fix-tools">
+          <label class="switch" for="fixShow" title="Show or hide the list of suggestions (the count and Fix all stay)">
+            <input type="checkbox" id="fixShow" role="switch" aria-controls="fixList" checked>
+            <span class="slider" aria-hidden="true"></span>
+            <span class="switch-text">Show suggestions</span>
+          </label>
+          <button class="btn small" id="fixAllBtn" type="button" title="Use the first fix everywhere it is sure; spelling guesses from the dictionary you choose yourself. Undo takes it back.">Fix all</button>
+        </div>
+        <ol id="fixList" class="fix-list" aria-labelledby="fixTitle"></ol>
+      </div>
+
+      <p id="warn" class="warn" role="status" hidden></p>
+    </section>
+
+    <section class="panel step-panel" id="pagePanel" aria-labelledby="pageTitle">
+      <div class="panel-head">
+        <h2 id="pageTitle" tabindex="-1">Page</h2>
+        <label class="switch" for="pageMode">
+          <input type="checkbox" id="pageMode" role="switch">
+          <span class="slider" aria-hidden="true"></span>
+          <span class="switch-text">Use paper size</span>
+        </label>
+      </div>
+      <p class="hint page-off" id="pageOffHint">Off: DotSense uses the start position and print area from <button class="linkish" type="button" data-open-setup="values">Machine setup › Machine values</button>. Switch on to choose A4, Letter and other sizes.</p>
+      <div id="pageFields" hidden>
+        <div class="field">
+          <label for="paperSize">Paper size</label>
+          <select id="paperSize"></select>
+        </div>
+        <div class="grid2" id="customSize" hidden>
+          <div class="field"><label for="paperW">Paper width <span class="unit">mm</span></label><input type="number" id="paperW" min="20" step="1" value="210"></div>
+          <div class="field"><label for="paperH">Paper height <span class="unit">mm</span></label><input type="number" id="paperH" min="20" step="1" value="297"></div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <span class="label" id="orientLabel">Orientation</span>
+            <div class="seg" role="radiogroup" aria-labelledby="orientLabel">
+              <label><input type="radio" name="orientation" value="portrait" checked><span>Portrait</span></label>
+              <label><input type="radio" name="orientation" value="landscape"><span>Landscape</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="paperMargin">Margin</label>
+            <div class="unit-row">
+              <input type="number" id="paperMargin" min="0" step="1" value="10">
+              <div class="seg seg-unit" role="radiogroup" aria-label="Margin unit">
+                <label><input type="radio" name="marginUnit" value="cm"><span>cm</span></label>
+                <label><input type="radio" name="marginUnit" value="mm" checked><span>mm</span></label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <fieldset class="scale-box">
+          <legend>Braille size</legend>
+          <label class="radio"><input type="radio" name="pageScale" value="fit" checked> Fit to printer margins</label>
+          <label class="radio"><input type="radio" name="pageScale" value="reduce"> Reduce to printer margins</label>
+          <div class="scale-custom">
+            <label class="radio"><input type="radio" name="pageScale" value="custom"> Custom scale</label>
+            <input type="number" id="scalePct" min="50" max="200" step="1" value="100" aria-label="Custom scale in percent">
+            <span class="unit">%</span>
+          </div>
+        </fieldset>
+        <p id="scaleInfo" class="hint"></p>
+        <p id="scaleWarn" class="warn" role="status" hidden></p>
+        <div id="pageWarn" class="warn" role="status" hidden>
+          <p id="pageWarnText"></p>
+          <div class="fix-row" id="pageFix" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <details class="panel more-panel" id="morePanel">
+      <summary><span class="more-title">More</span></summary>
+      <div class="more-body">
+        <div class="more-item">
+          <div class="invert-head">
+            <h3 id="invertTitle">Invert print (mirror)</h3>
+            <label class="switch" for="invertPrint">
+              <input type="checkbox" id="invertPrint" role="switch" checked aria-labelledby="invertTitle" aria-describedby="invertDesc">
+              <span class="slider" aria-hidden="true"></span>
+              <span class="switch-text" id="invertState">On</span>
+            </label>
+          </div>
+          <p class="invert-desc" id="invertDesc">Punch from the top, read from the back: “Hello” is punched as O L L E H, each cell flipped.</p>
+        </div>
+        <div class="more-item">
+          <h3 id="betweenTitle">Between pages</h3>
+          <div class="sheet-row">
+            <label class="switch" for="autoNext">
+              <input type="checkbox" id="autoNext" role="switch" checked>
+              <span class="slider" aria-hidden="true"></span>
+              <span class="switch-text">Next page starts after</span>
+            </label>
+            <input type="number" id="autoNextSec" min="5" max="3600" step="1" value="30" aria-label="Seconds before the next page starts">
+            <span class="unit">sec</span>
+          </div>
+        </div>
+        <div class="more-item">
+          <h3>PDF</h3>
+          <label class="check"><input type="checkbox" id="pdfPaper"> Choose paper size by PDF page size (when you scan a PDF with Use paper size on)</label>
+        </div>
+        <div class="more-item gcode-item">
+          <div class="output-head">
+            <h3 id="gcodeTitle">G-code</h3>
+            <div class="btnrow">
+              <button class="btn small" id="copyBtn" type="button">Copy</button>
+              <button class="btn small" id="saveBtn" type="button">Save page…</button>
+              <button class="btn small primary" id="saveAllBtn" type="button">Save all (ZIP)…</button>
+              <label class="switch gcode-show" for="showGcode" title="Show or hide the G-code">
+                <input type="checkbox" id="showGcode" role="switch" aria-controls="output">
+                <span class="slider" aria-hidden="true"></span>
+                <span class="switch-text">Show</span>
+              </label>
+            </div>
+          </div>
+          <pre id="output" tabindex="0" aria-label="G-code for this page" hidden></pre>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="col">
+    <section class="panel step-panel" id="previewPanel" aria-labelledby="prevTitle">
+      <div class="panel-head preview-head">
+        <div class="head-tools">
+          <h2 id="prevTitle" tabindex="-1">Preview</h2>
+          <button class="btn small inv-state on" id="invertViewBtn" type="button" aria-pressed="false" title="Invert print is on. Show the mirrored page the machine punches on the right, next to this one">Invert view</button>
+          <span class="btn small inv-state off" id="invertOffTag" role="status" title="Invert print is off: pages are punched as they read" hidden>Invert off</span>
+        </div>
+        <div class="seg zoom-seg" role="radiogroup" aria-label="Zoom">
+          <label><input type="radio" name="zoom" value="fit" checked><span>Fit page</span></label>
+          <label><input type="radio" name="zoom" value="100"><span>100 %</span></label>
+          <label><input type="radio" name="zoom" value="200"><span>200 %</span></label>
+        </div>
+        <div class="pager">
+          <button class="btn icon" id="prevPage" type="button" aria-label="Previous page">‹</button>
+          <span id="pageLabel">Page 1 of 1</span>
+          <button class="btn icon" id="nextPage" type="button" aria-label="Next page">›</button>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="n" id="statLetters">0</span><span class="l">Letters</span></div>
+        <div class="stat"><span class="n" id="statDots">0</span><span class="l">Dots</span></div>
+        <div class="stat"><span class="n" id="statLines">0</span><span class="l">Lines</span></div>
+        <div class="stat"><span class="n" id="statPages">0</span><span class="l" id="statPagesLabel">Pages</span></div>
+      </div>
+      <div class="preview-wrap" id="preview" role="img" aria-label="Braille preview"></div>
+      <div class="braille-box" id="brailleBox">
+        <div class="bt-head">
+          <h3 id="brailleTitle">Braille text</h3>
+          <span class="bt-note">for proofreading, braille displays and screen readers</span>
+          <button class="btn small" id="copyBrailleBtn" type="button">Copy</button>
+        </div>
+        <textarea class="bt-lines" id="brailleText" readonly wrap="off" rows="4" spellcheck="false" placeholder="–" aria-labelledby="brailleTitle"></textarea>
+        <p id="bounds" class="hint mono"></p>
+      </div>
+      <p id="error" class="error" role="alert" hidden></p>
+    </section>
+  </div>
+</main>
+
+<!-- 3 Print: always at the bottom of the window, also while Machine setup is open (Stop stays in reach) -->
+<section class="print-bar step-panel" id="printBar" aria-labelledby="printTitle">
+  <div class="bar-notices">
+    <div id="sheetPrompt" class="notice sheet-notice" hidden>
+      <p id="sheetPromptText" aria-live="polite"></p>
+      <div class="mini-bar sheet-bar" id="sheetBar" hidden><span id="sheetBarFill"></span></div>
+      <div class="btnrow">
+        <button class="btn primary" id="sheetContinue" type="button">Continue</button>
+        <button class="btn" id="sheetWait" type="button" hidden>Wait</button>
+        <button class="btn" id="sheetCancel" type="button">Stop here</button>
+      </div>
+    </div>
+    <div id="machineMsg" class="notice" role="status" hidden>
+      <p id="machineMsgText"></p>
+      <div class="btnrow" id="machineMsgActions"></div>
+      <button class="btn icon small notice-close" id="machineMsgClose" type="button" aria-label="Close this message">✕</button>
+    </div>
+  </div>
+  <div class="bar-row">
+    <h2 class="bar-step" id="printTitle" tabindex="-1">Print</h2>
+    <span class="state-badge" id="stateBadge" data-tone="off"><span class="led"></span><span id="stateText">Not connected</span></span>
+    <span class="mono pos" id="posReadout" hidden>X –   Y –   Z –</span>
+    <button class="btn small primary" id="barConnectBtn" type="button">Connect</button>
+    <div class="bar-mid">
+      <span class="bar-info" id="barInfo"></span>
+      <div class="progress" id="progressBox" hidden>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Print progress" id="progressBar"><span id="progressFill"></span></div>
+        <div class="progress-text" id="progressText">
+          <span class="progress-left" id="progressLeft" title="Time left for this job (hours:minutes:seconds)"></span>
+          <span aria-live="polite"><strong id="progressMain"></strong>
+          <span id="progressSub" class="muted"></span></span>
+        </div>
+      </div>
+      <span id="statusMsg" role="status"></span>
+    </div>
+    <label class="tick" title="I checked the start position, print area and Z depth for my machine, and the paper is clamped."><input type="checkbox" id="confirmed" aria-describedby="confirmedDesc"> Position and paper checked</label>
+    <span class="sr-only" id="confirmedDesc">I checked the start position, print area and Z depth for my machine, and the paper is clamped.</span>
+    <div class="btnrow print-controls">
+      <button class="btn primary" id="printPageBtn" type="button" disabled>Print this page</button>
+      <button class="btn" id="printAllBtn" type="button" disabled>Print all pages</button>
+      <button class="btn" id="pauseBtn" type="button" disabled>Pause</button>
+      <button class="btn danger" id="stopBtn" type="button" disabled>Stop</button>
+    </div>
+  </div>
+</section>
+
+<!-- Machine setup: values that belong to the machine, set once -->
+<div class="setup-backdrop" id="setupBackdrop" hidden>
+  <div class="setup" id="setupPanel" role="dialog" aria-labelledby="setupTitle">
+    <div class="setup-head">
+      <h2 id="setupTitle">Machine setup</h2>
+      <button class="btn icon" id="setupClose" type="button" aria-label="Close Machine setup">✕</button>
+    </div>
+    <div class="setup-tabs" role="tablist" aria-label="Machine setup">
+      <button class="setup-tab" role="tab" type="button" id="tab-guide" data-tab="guide" aria-controls="setupGuide" aria-selected="true">Calibration guide</button>
+      <button class="setup-tab" role="tab" type="button" id="tab-values" data-tab="values" aria-controls="setupValues" aria-selected="false" tabindex="-1">Machine values</button>
+      <button class="setup-tab" role="tab" type="button" id="tab-tools" data-tab="tools" aria-controls="setupTools" aria-selected="false" tabindex="-1">Tool Box</button>
+      <button class="setup-tab" role="tab" type="button" id="tab-conn" data-tab="conn" aria-controls="setupConn" aria-selected="false" tabindex="-1">Connection</button>
+    </div>
+    <div class="setup-body">
+      <section class="setup-pane" role="tabpanel" id="setupGuide" aria-labelledby="tab-guide">
+        <p class="setup-note">Do this once, and again when you change the punch or move the machine.</p>
+        <ol class="guide">
+          <li><div><b>Connect the machine.</b> Plug in the USB cable, choose the port and press Connect. Close Candle or UGS first: only one program can use the port.<br><button class="btn small" type="button" data-open-tab="conn">Open Connection</button></div></li>
+          <li><div><b>Clamp the paper.</b> Lay the sheet flat with its top edge toward the back of the machine, and clamp it so it cannot move.</div></li>
+          <li><div><b>Set X/Y zero.</b> Jog the punch tip over the paper's front-left corner (the bottom-left of the page), then press <i>Set X/Y zero here</i>.<br><button class="btn small" type="button" data-open-tab="tools">Open Tool Box</button></div></li>
+          <li><div><b>Set Z zero.</b> Lower Z with 1 mm, then 0.1 mm steps until the tip just touches the paper. Press <i>Set Z zero here</i>, then Z+ to lift it again.</div></li>
+          <li><div><b>Check the machine values.</b> Punch depth Z is how far below the paper the tip goes: go deeper in small steps until the dots are clear but the paper does not tear. Clearance Z is the height it travels at. Dot, cell and line pitch set the braille spacing.<br><button class="btn small" type="button" data-open-tab="values">Open Machine values</button></div></li>
+          <li><div><b>Test the start.</b> Choose your paper under 2 Page, then press <i>Go to start position</i>: the tip stops above the first dot, which must be just inside the dashed margin line of the preview on your paper.</div></li>
+          <li><div><b>Check the paper.</b> <i>Check</i> in the Tool Box lifts the punch 5 mm and moves it once around the margin line, then back to the start position: the path must stay on your paper, just inside its edges. ■ stops it.</div></li>
+          <li><div><b>Lock the values</b> in Machine values, so they do not change by accident.</div></li>
+        </ol>
+      </section>
+
+      <section class="setup-pane" role="tabpanel" id="setupValues" aria-labelledby="tab-values" hidden>
+        <p class="setup-note">These belong to the machine and the punch, not to each print. With <i>Use paper size</i> on, the start position and print area come from the paper size.</p>
+        <p class="lock-note" id="lockNote" hidden>Locked. Switch <i>Lock these values</i> off to change them.</p>
+        <div class="values-grid">
+        <div id="machineFields">
+          <div class="field">
+            <label for="originX">Start position (first dot) <span class="unit">X / Y mm</span> <span class="auto-note" id="autoNote1" hidden>· from paper size</span></label>
+            <div class="grid2">
+              <input type="number" id="originX" step="0.5" aria-label="Start X">
+              <input type="number" id="originY" step="0.5" aria-label="Start Y">
+            </div>
+          </div>
+          <div class="field">
+            <label for="width">Print area from start <span class="unit">width / height mm</span> <span class="auto-note" id="autoNote2" hidden>· from paper size</span></label>
+            <div class="grid2">
+              <input type="number" id="width" step="1" min="1" aria-label="Print width">
+              <input type="number" id="height" step="1" min="1" aria-label="Print height">
+            </div>
+          </div>
+          <div class="grid3">
+            <div class="field"><label for="dotPitch">Dot pitch <span class="unit">mm</span></label><input type="number" id="dotPitch" step="0.1" min="0.5"></div>
+            <div class="field"><label for="cellPitch">Cell pitch <span class="unit">mm</span></label><input type="number" id="cellPitch" step="0.5" min="1"></div>
+            <div class="field"><label for="linePitch">Line pitch <span class="unit">mm</span></label><input type="number" id="linePitch" step="0.5" min="1"></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label for="clearZ">Clearance Z <span class="unit">mm</span></label><input type="number" id="clearZ" step="0.5"></div>
+            <div class="field"><label for="punchZ">Punch depth Z <span class="unit">mm</span></label><input type="number" id="punchZ" step="0.5"></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label for="feed">Plunge feed <span class="unit">mm/min</span></label><input type="number" id="feed" step="50" min="10"></div>
+            <div class="field"><label for="dwell">Settle dwell <span class="unit">sec</span></label><input type="number" id="dwell" step="0.05" min="0"></div>
+          </div>
+          <p id="fitInfo" class="hint mono"></p>
+        </div>
+        <aside class="mv-preview" aria-labelledby="mvTitle">
+          <h3 id="mvTitle">Live preview</h3>
+          <figure class="mv-fig">
+            <svg id="mvSheet" class="mv-svg" role="img" aria-label="The sheet, the print area and the start position"></svg>
+            <figcaption id="mvSheetCap"></figcaption>
+          </figure>
+          <figure class="mv-fig">
+            <svg id="mvCell" class="mv-svg" role="img" aria-label="Braille spacing"></svg>
+            <figcaption id="mvCellCap">Braille spacing</figcaption>
+          </figure>
+          <figure class="mv-fig">
+            <svg id="mvZ" class="mv-svg" role="img" aria-label="Z heights"></svg>
+            <figcaption id="mvZCap"></figcaption>
+          </figure>
+          <p class="error mv-error" id="mvError" role="alert" hidden></p>
+        </aside>
+        </div>
+        <div class="lock-row">
+          <button class="btn small" id="resetBtn" type="button">Reset defaults</button>
+          <span class="spacer"></span>
+          <strong class="lock-title" id="lockTitle">Lock these values</strong>
+          <label class="switch" for="lockMachine">
+            <input type="checkbox" id="lockMachine" role="switch" aria-labelledby="lockTitle">
+            <span class="slider" aria-hidden="true"></span>
+            <span class="switch-text" id="lockState">Unlocked</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="setup-pane" role="tabpanel" id="setupTools" aria-labelledby="tab-tools" hidden>
+        <p class="setup-note">Move the punch, set zero and test. Z moves at most 10 mm per click.</p>
+        <div class="jog">
+          <div class="jogpad" role="group" aria-label="Jog">
+            <span></span><button class="btn" type="button" data-jog="Y+">Y+</button><span></span><span></span><button class="btn" type="button" data-jog="Z+" title="Z moves at most 10 mm per click">Z+</button>
+            <button class="btn" type="button" data-jog="X-">X−</button><button class="btn" type="button" id="jogStop" title="Cancel jog" aria-label="Cancel jog">■</button><button class="btn" type="button" data-jog="X+">X+</button><span></span><span></span>
+            <span></span><button class="btn" type="button" data-jog="Y-">Y−</button><span></span><span></span><button class="btn" type="button" data-jog="Z-" title="Z moves at most 10 mm per click">Z−</button>
+          </div>
+          <div class="jog-side">
+            <div class="steps" role="radiogroup" aria-label="Jog step">
+              Step
+              <label><input type="radio" name="jogStep" value="0.1"><span>0.1</span></label>
+              <label><input type="radio" name="jogStep" value="1" checked><span>1</span></label>
+              <label><input type="radio" name="jogStep" value="10"><span>10</span></label>
+              <div class="seg seg-mini" role="radiogroup" aria-label="Jog step unit">
+                <label><input type="radio" name="jogUnit" value="cm"><span>cm</span></label>
+                <label><input type="radio" name="jogUnit" value="mm" checked><span>mm</span></label>
+              </div>
+            </div>
+            <div class="btnrow">
+              <button class="btn small" type="button" id="zeroXY">Set X/Y zero here</button>
+              <button class="btn small" type="button" id="zeroZ">Set Z zero here</button>
+            </div>
+            <div class="btnrow">
+              <button class="btn small" type="button" id="gotoStart" title="Move above the start position (top-left dot of the print area) at clearance height">Go to start position</button>
+              <button class="btn small" type="button" id="unlockBtn" title="Clear an ALARM lock ($X)">Unlock</button>
+              <button class="btn small" type="button" id="homeBtn" hidden>Home ($H)</button>
+            </div>
+            <div class="btnrow">
+              <button class="btn small" type="button" id="resetMachineBtn" title="Resets the GRBL controller without switching the machine power off (Ctrl+X). Use it if GRBL is stuck, a job needs to be aborted, or you need to reset the controller.">
+                <svg class="i-reset" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.2 4.6v4.2h4.2"/></svg>Soft Reset
+              </button>
+              <button class="btn small check-btn" type="button" id="checkBtn" title="Auto calibrate: the punch goes 5 mm up, goes once around the 4 sides of the margin line and back to the start position. ■ stops it.">
+                <svg class="i-reset" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5l4.8 4.8L19.5 7"/></svg>Check
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="tb-live" aria-labelledby="tbTitle">
+          <div class="tb-head">
+            <h3 id="tbTitle">Live position</h3>
+            <span class="mono tb-pos" id="tbPos" aria-live="off">X –  Y –  Z –</span>
+          </div>
+          <div class="tb-views">
+            <svg id="tbMap" class="tb-map" role="img" aria-label="Top view: machine reach, paper and where the punch is"></svg>
+            <svg id="tbZ" class="tb-z" role="img" aria-label="Side view: punch height"></svg>
+          </div>
+          <p class="hint tb-note" id="tbNote">Connect the machine to see the punch move here.</p>
+        </div>
+      </section>
+
+      <section class="setup-pane" role="tabpanel" id="setupConn" aria-labelledby="tab-conn" hidden>
+        <p class="setup-note">Plug in the USB cable, choose the machine's port (usually COM3, ttyUSB0 or cu.usbserial…) and press Connect. Close Candle or UGS first: only one program can use the port.</p>
+        <div class="connect-row">
+          <select id="portSelect" aria-label="Machine USB port"></select>
+          <button class="btn icon" id="refreshPorts" type="button" title="Refresh port list" aria-label="Refresh port list">⟳</button>
+          <select id="baudSelect" aria-label="Baud rate" title="Baud rate">
+            <option>115200</option><option>250000</option><option>57600</option><option>38400</option><option>9600</option>
+          </select>
+          <button class="btn primary" id="connectBtn" type="button">Connect</button>
+        </div>
+        <p class="conn-version"><span id="machineVersion" class="muted mono"></span></p>
+        <details id="logDetails" open>
+          <summary>Machine log</summary>
+          <pre id="log" class="log" aria-live="off"></pre>
+          <form id="cmdForm" class="cmd" autocomplete="off">
+            <input id="cmdInput" type="text" placeholder="Command, e.g. $$ or $X" aria-label="Machine command">
+            <button class="btn" type="submit">Send</button>
+          </form>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- About: the developer of DotSense -->
+<div class="setup-backdrop" id="aboutBackdrop" hidden>
+  <div class="setup about" id="aboutPanel" role="dialog" aria-labelledby="aboutName">
+    <button class="btn icon about-close" id="aboutClose" type="button" aria-label="Close About">✕</button>
+    <div class="about-card">
+      <p class="about-kicker">About</p>
+      <h2 class="about-name" id="aboutName">Tahasin Kabir Rubai</h2>
+      <p class="about-role">Full Stack Developer</p>
+      <p class="about-contact">
+        <a class="about-chip" href="mailto:rubaitahacinkabir@gmail.com" target="_blank" rel="noopener noreferrer" title="Email">
+          <svg class="about-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.8 7l8.2 6 8.2-6"/></svg>
+          <span class="sr-only">Email: </span>rubaitahacinkabir@gmail.com
+        </a>
+        <a class="about-chip" href="mailto:trubai2330290@bscse.uiu.ac.bd" target="_blank" rel="noopener noreferrer" title="University email (UIU)">
+          <svg class="about-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 9.5L12 5l9.5 4.5L12 14z"/><path d="M6.5 11.6v4.2c1.5 1.4 3.3 2.1 5.5 2.1s4-.7 5.5-2.1v-4.2M21.5 9.5v5"/></svg>
+          <span class="sr-only">University email: </span>trubai2330290@bscse.uiu.ac.bd
+        </a>
+        <a class="about-chip" href="tel:+8801766968514" target="_blank" rel="noopener noreferrer" title="Phone">
+          <svg class="about-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M10.6 18.4h2.8"/></svg>
+          <span class="sr-only">Phone: </span>+880 1766968514
+        </a>
+      </p>
+      <hr class="about-rule">
+      <h3 class="about-label">Professional summary</h3>
+      <p class="about-summary"><strong>Full stack developer</strong> and third-year <strong>Computer Science and Engineering</strong> student at <strong>United International University (UIU)</strong>, batch 233. Designs and builds complete applications end to end – from the interface people use to the logic and systems behind it – with a focus on software that is reliable, accessible and easy to use.</p>
+      <hr class="about-rule">
+      <h3 class="about-label about-label-center">Profiles</h3>
+      <nav class="about-links" aria-label="Profiles of Tahasin Kabir Rubai">
+        <a class="social about-link" data-brand="linkedin" href="https://www.linkedin.com/in/tahasin-kabir" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn · www.linkedin.com/in/tahasin-kabir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.6-3.9 3.6-5.8 7.5-5.8s6.9 1.9 7.5 5.8"/></svg>
+        </a>
+        <a class="social about-link" data-brand="github" href="https://github.com/TahasinKabir" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub · github.com/TahasinKabir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg>
+        </a>
+        <a class="social about-link" data-brand="facebook" href="https://www.facebook.com/tahasinkabir86" target="_blank" rel="noopener noreferrer" aria-label="Facebook" title="Facebook · facebook.com/tahasinkabir86">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c.5-3.2 2.9-5 6-5s5.5 1.8 6 5"/><path d="M15.5 5.6a3 3 0 0 1 0 5.8M17.6 14.8c2 .6 3.1 2.2 3.4 4.7"/></svg>
+        </a>
+        <a class="social about-link" data-brand="whatsapp" href="https://wa.me/8801518699311" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" title="WhatsApp · wa.me/8801518699311">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg>
+        </a>
+      </nav>
+      <hr class="about-rule">
+      <h3 class="about-label">About DotSense</h3>
+      <p class="about-summary">DotSense turns everyday text into punched braille on an affordable GRBL 3018 CNC – one complete, offline workflow from words to a tactile page. <span class="about-version" id="aboutVersion"></span></p>
+      <ul class="about-highlights">
+        <li><strong>Three ways in</strong><span>Type, dictate with offline voice typing, or scan photos, PDFs and phone pictures with OCR – in English and Bangla.</span></li>
+        <li><strong>Accurate braille</strong><span>Grade-1 English and Bangla braille with the Unified English Braille signs – @ # % & ( ) quotes, dashes, money, maths and accented letters – shown at real paper size, with a Unicode braille text of every page for proofreading.</span></li>
+        <li><strong>Paper-aware layout</strong><span>A4, Letter and more; the braille size fits the sheet and no dot is ever placed outside its margins.</span></li>
+        <li><strong>Live printing</strong><span>Every dot shown as it is punched, a countdown timer, pause, stop and soft reset, mirror printing, and a check mode that tests the G&#8209;code without moving the machine.</span></li>
+        <li><strong>Guided setup</strong><span>A calibration guide, machine values with a live preview, and a live view of the punch while you jog.</span></li>
+        <li><strong>Offline and private</strong><span>Voice typing and OCR run on the computer; nothing is uploaded.</span></li>
+      </ul>
+
+      <hr class="about-rule">
+      <h3 class="about-label" id="manualTitle">User manual</h3>
+      <section class="manual" aria-labelledby="manualTitle">
+        <p class="manual-intro">From an empty text to a punched page in six steps. The chapters below explain every part; the highlighted notes are the ones that matter most.</p>
+        <ol class="manual-quick">
+          <li><span><b>Connect the machine</b> – plug in the USB cable, open <b>Machine setup › Connection</b>, choose the port, 115200 baud, <b>Connect</b>. The status at the top right turns to <i>DotSense connected</i>.</span></li>
+          <li><span><b>Calibrate once</b> – follow <b>Machine setup › Calibration guide</b>: X/Y zero at the paper's front-left corner, Z zero on the paper surface.</span></li>
+          <li><span><b>Enter the text</b> in <b>Text</b> – type it, use <b>Voice typing</b>, or <b>Scan (OCR)</b> a photo or PDF.</span></li>
+          <li><span><b>Choose the paper</b> in <b>Page</b> – switch on <b>Use paper size</b>, pick the size, orientation and margin.</span></li>
+          <li><span><b>Check it</b> in <b>Preview</b> – the sheet at its real shape and the <b>Braille text</b> for proofreading.</span></li>
+          <li><span><b>Print</b> – clamp the paper, tick <b>Position and paper checked</b>, press <b>Print page</b> or <b>Print all pages</b>.</span></li>
+        </ol>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">01</span>The window</summary>
+          <div class="manual-body">
+            <ul>
+              <li>The bar at the top left: <b>WiFi</b>, <b>Text</b>, <b>Page</b>, <b>Preview</b>, <b>Machine setup</b>, <b>Print</b>, <b>About</b> and the light / dark switch. Text, Page, Preview and Print jump to that part; the part you work in lights up.</li>
+              <li>Top right: the machine status (<i>Not connected</i>, <i>DotSense connected</i>, <i>Printing 42%</i>…; click it for the connection) and <b>Open…</b> / <b>Save…</b> for projects.</li>
+              <li>The <b>Print</b> bar stays at the bottom of the window: machine state and position, pages and time, the safety tick and the print buttons. Messages appear just above it; <b>✕</b> closes one.</li>
+              <li><b>More</b> (under Page) holds Invert print, Between pages, the PDF paper choice and the G-code.</li>
+              <li><kbd>Esc</kbd> closes Machine setup and About. DotSense remembers your text, settings, zoom and theme.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">02</span>Entering text</summary>
+          <div class="manual-body">
+            <ul>
+              <li><b>Type or paste</b> into Text. <b>Next page</b> starts a new sheet at the cursor and writes <code>[[New Page 3]]</code> – the number of the page it starts, kept up to date when the text changes. Long text wraps into lines and pages by itself.</li>
+              <li><b>English / বাংলা</b> sets the language for voice typing. Scanning reads Bangla and English by itself, also mixed in one page.</li>
+              <li><b>Auto correct</b> (on unless you switch it off) underlines mistakes as you type, in English and Bangla: spelling (<i>sentense</i> → sentence), sentences (<i>he go</i> → he goes, <i>its a</i> → it’s a), punctuation (<i>How are you.</i> → ?, <i>!!</i> → !) and capitals (<i>monday</i> → Monday; <span lang="bn">আছি.</span> → <span lang="bn">আছি।</span>). <b>Click an underlined word</b> for its fixes (or right-click it, or Ctrl+.). <b>Ignore</b> skips one, <b>Add to dictionary</b> keeps a name from being marked, <b>Fix all</b> uses the first fix everywhere it is sure. The <b>Show suggestions</b> switch shows or hides the list under the buttons. <b>Clear</b> empties the text box (it asks first).</li>
+              <li><b>Signs</b> – besides <code>, ; : . ! ? ' -</code>, DotSense punches the Unified English Braille signs: <code>@ # $ % &amp; * + = / \ _ ~ ^ | &lt; &gt; ( ) [ ] { }</code>, “quotes”, dashes – —, money € £ ¥ ¢, © ® ™ § ¶ ° •, maths ± × ÷ ≠ ≤ ≥ ≡ ∫ ∑ ∈ ⊂ ∩ ∪ ½ ¾ ² ³, arrows ← → ⇒, shapes ■ ○, Greek α β π Ω, and accented letters such as é ñ ü ç ø ß æ. Point at a cell in the preview to see what it is.</li>
+              <li><b>Voice typing</b> – the first time, choose a speech model to download once (Accurate 111 MB, Fast 30 MB, Bangla 87 MB); after that it works offline. Say <i>“new line”</i>, <i>“new paragraph”</i> or <i>“new page”</i> (Bangla: <span lang="bn">নতুন লাইন, নতুন অনুচ্ছেদ, নতুন পাতা</span>).</li>
+              <li><b>Scan (OCR)…</b> reads PNG, JPG, BMP, WebP and PDF files (or drop them on the window) – Bangla and English, also mixed, with the models that come with the app. Photos from a camera or the phone are cleaned up first (shadows and uneven light taken out) and the lines of each paragraph are joined. Choose <b>Replace</b> or <b>Add after</b>, a PDF page range (last page blank = to the end), <b>OCR every PDF page</b> for scanned PDFs, a new sheet for each source page, or <b>Keep the picture's line breaks</b> for poems and lists.</li>
+              <li><b>Photo from phone</b> (in Scan) – press <b>Use phone camera</b>, put the phone on the same WiFi (the machine's WiFi <i>MKS_DLC</i>; <b>WiFi</b> at the top left joins it in one click), scan the code and tap <b>Take photo</b>. On the phone each photo waits with <b>Send</b>, <b>Crop</b> (drag the frame's corners or edges) and <b>Remove</b>; after Send the text goes straight into the text box. Click a small photo in Scan to see it large – <b>Remove photo</b> there also takes its text out.</li>
+            </ul>
+            <p class="manual-note"><strong>Important</strong>Always read the text after scanning or dictating: OCR and speech can mishear or misread. Characters that are not in the braille table are listed in a warning and punched as blank cells.</p>
+          </div>
+        </details>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">03</span>Page and paper</summary>
+          <div class="manual-body">
+            <ul>
+              <li>Switch on <b>Use paper size</b> and pick the sheet (A4, Letter, A5, envelopes… or <b>User-Defined</b>), <b>Portrait</b> or <b>Landscape</b>, and a <b>Margin</b> in cm or mm.</li>
+              <li><b>Braille size</b>: <b>Fit to printer margins</b> makes the braille fill one sheet (50–200 %), <b>Reduce to printer margins</b> only shrinks it, <b>Custom scale</b> is your own size.</li>
+              <li>The dots stay 2 mm inside the margin line, and DotSense checks every dot again before the machine moves: nothing is punched outside the page.</li>
+              <li>If the sheet is bigger than the machine can reach (a typical 3018 moves about 300 × 180 mm), a warning offers the fix as a button – for example <b>Landscape with a 28 mm margin</b>.</li>
+              <li>With Use paper size off, your own start position and print area from Machine values are used.</li>
+            </ul>
+            <p class="manual-note"><strong>Important</strong>DotSense measures the paper from X0 Y0 at its front-left corner. If the size or braille size changes the start position, the safety tick is cleared so you check it again.</p>
+          </div>
+        </details>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">04</span>Preview and proofreading</summary>
+          <div class="manual-body">
+            <ul>
+              <li>The preview shows the sheet at its real shape with every dot where it will be punched. <b>Fit page</b>, <b>100 %</b> and <b>200 %</b> zoom; ‹ › change the page.</li>
+              <li>The numbers: letters, dots, lines and pages. The Print bar says how long the text takes; while printing its progress line counts down the time left (00:00:00 left).</li>
+              <li><b>Braille text</b> under the sheet is the page in Unicode braille, line by line – for proofreading, braille displays and screen readers. <b>Copy</b> puts it on the clipboard.</li>
+              <li><b>Invert view</b> puts the mirrored machine side next to the reading side; <b>↗</b> opens it in its own window.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">05</span>Machine setup and calibration</summary>
+          <div class="manual-body">
+            <ul>
+              <li><b>Calibration guide</b> – eight steps from connecting to locking the values, with a button to each tab.</li>
+              <li><b>Machine values</b> – start position, print area, dot / cell / line pitch, clearance Z, punch depth Z, plunge feed and settle dwell. They are <b>locked</b>: switch the lock off to change them and on again afterwards. The <b>Live preview</b> shows the sheet, the spacing and the Z heights as you type.</li>
+              <li><b>Tool Box</b> – jog in steps of 0.1, 1 or 10 mm (or cm), <b>Set X/Y zero here</b>, <b>Set Z zero here</b>, <b>Go to start position</b>, <b>Unlock</b>, <b>Soft Reset</b> and <b>Check</b> (auto calibrate: 5 mm up, once around the margin line, back to the start). <b>Live position</b> shows where the punch is, as the machine reports it.</li>
+              <li><b>Connection</b> – port, baud rate, Connect / Disconnect, the machine log and a command line.</li>
+            </ul>
+            <p class="manual-note"><strong>Important</strong>Find the punch depth in small steps: deep enough for clear dots, not so deep that the paper tears. Test with <b>Go to start position</b> before the first real print.</p>
+          </div>
+        </details>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">06</span>Printing</summary>
+          <div class="manual-body">
+            <ol>
+              <li>Clamp the paper and tick <b>Position and paper checked</b>. Hover a greyed-out Print button to see what is still missing.</li>
+              <li><b>Print page N</b> or <b>Print all pages</b>, then confirm.</li>
+              <li>Watch it live: punched dots turn dark, the pulsing dot is the one being punched, the time left counts down in the Print bar.</li>
+              <li><b>Pause</b> holds the machine (<b>Resume</b> goes on); <b>Stop</b> holds, resets and lifts the punch to clearance.</li>
+              <li>With several pages DotSense stops after each sheet and beeps; the next page starts by itself after 30 s (<b>More › Between pages</b>). <b>Continue now</b>, <b>Wait</b> or <b>Stop here</b>.</li>
+            </ol>
+            <ul>
+              <li><b>Invert print</b> (More, on by default) punches the page mirrored, so it reads correctly from the back.</li>
+              <li><b>Check</b> (Tool Box) lifts the punch 5 mm and moves it once around the margin line and back to the start, so you can see that the paper is in the right place before punching.</li>
+              <li><b>Soft Reset</b> aborts a job at once; afterwards press <b>Unlock</b>, lift the punch with Z+ and check the position.</li>
+            </ul>
+            <p class="manual-note"><strong>Important</strong>Put the next sheet in at exactly the same place (same work zero) before the countdown ends.</p>
+          </div>
+        </details>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">07</span>Projects and files</summary>
+          <div class="manual-body">
+            <ul>
+              <li><b>Save…</b> stores the text and all settings as a DotSense project; <b>Open…</b> brings it back (Braille Gcode 2 projects open too).</li>
+              <li><b>More › G-code</b>: <b>Copy</b>, <b>Save page…</b> (.gcode) and <b>Save all (ZIP)…</b> for other senders. With Invert print the file names end in <code>_invert</code>.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">08</span>Troubleshooting</summary>
+          <div class="manual-body">
+            <ul>
+              <li><b>Port busy / access denied</b> – close Candle, UGS or the Arduino IDE: only one program can use the port.</li>
+              <li><b>No port listed (Windows)</b> – install the CH340 USB driver for the board.</li>
+              <li><b>No reply from GRBL</b> – check the baud rate (115200) and the USB cable.</li>
+              <li><b>ALARM</b> – check the machine, then <b>Unlock</b>; after a limit alarm set zero again.</li>
+              <li><b>The sheet is out of reach</b> – use the fix button in Page (Landscape or a bigger margin).</li>
+              <li><b>The phone cannot open the page</b> – same WiFi on both; allow DotSense in Windows Firewall (also Public networks); on Android turn mobile data off.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="manual-ch">
+          <summary><span class="ch-no">09</span>Safety</summary>
+          <div class="manual-body">
+            <p class="manual-note danger"><strong>Important</strong>Stay at the machine while it prints. Stop in the software is not an emergency stop: keep a hand near the power switch.</p>
+            <ul>
+              <li>Keep your hands away from the punch, above all while the countdown between pages runs.</li>
+              <li>Clamp the paper so it cannot move; check the start position and Z depth for every new setup.</li>
+              <li>Text and settings are locked while printing, so nothing changes under the running job.</li>
+            </ul>
+          </div>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<dialog id="ocrDialog" aria-labelledby="ocrTitle">
+  <div class="dialog-body">
+    <div class="panel-head">
+      <h2 id="ocrTitle">Scan text (OCR)</h2>
+      <button class="btn icon" type="button" id="ocrClose" aria-label="Close">✕</button>
+    </div>
+    <label class="dropzone" id="dropzone">
+      <input id="files" type="file" multiple accept=".png,.jpg,.jpeg,.bmp,.webp,.pdf">
+      <strong>Choose images or PDF files</strong>
+      <span>or drop them here · <span id="ocrLangText">Bangla and English printed text</span> · works offline</span>
+    </label>
+    <section class="phone-card" id="phoneCard" data-state="off" aria-labelledby="phoneTitle">
+      <div class="phone-head">
+        <svg class="phone-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M10.6 18.4h2.8"/></svg>
+        <div class="phone-titles">
+          <strong id="phoneTitle">Photo from phone</strong>
+          <span id="phoneSub">Take a photo with your phone: it comes straight here and its text is read.</span>
+        </div>
+        <button class="btn primary" id="phoneBtn" type="button">Use phone camera</button>
+      </div>
+      <div class="phone-body" id="phoneBody" hidden>
+        <div class="qr-col">
+          <div class="qr-tile"><img id="phoneQr" alt="QR code for the phone" width="150" height="150"></div>
+          <div class="seg seg-qr" role="radiogroup" aria-label="The QR code shows">
+            <label><input type="radio" name="phoneQrKind" value="page" checked><span>Camera page</span></label>
+            <label><input type="radio" name="phoneQrKind" value="wifi"><span>Phone WiFi</span></label>
+          </div>
+        </div>
+        <div class="phone-info">
+          <ol class="phone-steps" id="phoneSteps"></ol>
+          <p class="phone-link">Or type in the phone's browser: <span class="mono" id="phoneUrl"></span></p>
+          <select id="phoneAddr" aria-label="Address of this computer" hidden></select>
+          <p class="phone-status" id="phoneStatus" data-tone="wait" role="status"></p>
+          <p class="hint phone-help" id="phoneHelp">Page does not open on the phone? Allow DotSense when Windows Firewall asks (tick Public networks too) and check that both are on the same WiFi. Android on the machine WiFi: turn mobile data off and stay connected when asked.</p>
+        </div>
+      </div>
+      <div class="phone-shots" id="phoneShots" aria-label="Photos from the phone" hidden></div>
+    </section>
+    <ol id="fileList" class="file-list"></ol>
+    <fieldset>
+      <legend>Put the text</legend>
+      <label class="radio"><input type="radio" name="importMode" value="replace" checked> Replace the current text</label>
+      <label class="radio"><input type="radio" name="importMode" value="append"> Add after the current text</label>
+    </fieldset>
+    <div class="grid2">
+      <div class="field"><label for="pdfStart">PDF first page</label><input id="pdfStart" type="number" value="1" min="1"></div>
+      <div class="field"><label for="pdfEnd">PDF last page <span class="unit">blank = all</span></label><input id="pdfEnd" type="number" min="1"></div>
+    </div>
+    <label class="check"><input id="forceOcr" type="checkbox"> OCR every PDF page (for scanned PDFs; otherwise the PDF's own text is used)</label>
+    <p class="hint" id="ocrBnNote">PDF pages with Bangla text are always read with OCR: the text stored in Bangla PDFs usually comes out scrambled.</p>
+    <label class="check"><input id="sourceBreak" type="checkbox"> Start a new braille sheet for each source page</label>
+    <label class="check"><input id="keepLines" type="checkbox"> Keep the picture's line breaks (for poems and lists; otherwise the lines of each paragraph are joined)</label>
+    <div class="btnrow" style="margin-top:12px">
+      <button class="btn primary" id="extractBtn" type="button">Extract text</button>
+      <button class="btn" id="stopOcrBtn" type="button" disabled>Stop after this page</button>
+    </div>
+    <p id="ocrStatus" class="status" role="status"></p>
+    <progress id="ocrProgress" value="0" max="100"></progress>
+    <ol id="sources" class="sources" style="margin-top:10px"></ol>
+    <p class="hint">Check the text after scanning: OCR can misread letters, and PDF columns or tables may come out in the wrong order.</p>
+  </div>
+</dialog>
+
+<dialog id="photoDialog" class="photo-dialog" aria-labelledby="photoCaption">
+  <img id="photoBig" alt="">
+  <div class="photo-bar">
+    <span id="photoCaption">Photo from the phone</span>
+    <button class="btn danger" type="button" id="photoRemove">Remove photo</button>
+  </div>
+  <button class="btn icon" type="button" id="photoClose" aria-label="Close">✕</button>
+</dialog>
+
+<dialog id="confirmDialog" aria-labelledby="confirmTitle">
+  <form method="dialog" class="dialog-body">
+    <h2 id="confirmTitle"></h2>
+    <p id="confirmText"></p>
+    <div class="btnrow" style="justify-content:flex-end">
+      <button class="btn" value="cancel" id="confirmCancel">Cancel</button>
+      <button class="btn primary" value="ok" id="confirmOk">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="core.js"></script>
+<script src="checker.js"></script>
+<script type="module" src="renderer.js"></script>
+</body>
+</html>

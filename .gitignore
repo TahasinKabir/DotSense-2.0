@@ -1,0 +1,6 @@
+# installed by npm install / built by npm run dist – never uploaded
+node_modules/
+dist/
+# macOS and logs
+.DS_Store
+npm-debug.log*

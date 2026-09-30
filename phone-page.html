@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#14181c">
+<title>DotSense camera</title>
+<style>
+:root {
+  --bg: #14181c; --panel: #1c2126; --line: #2c333a; --text: #e6e9ec; --muted: #8b96a1;
+  --accent: #f0a93a; --ink: #1c1200; --ok: #4cc27d; --bad: #ff7a6b;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f3f5f9; --panel: #ffffff; --line: #dde3ec; --text: #0f172a; --muted: #5d6a7e; --accent: #f59e0b; --ink: #1f1300; --ok: #15803d; --bad: #dc2626; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 16px/1.45 -apple-system, 'Segoe UI', Roboto, 'Noto Sans', 'Noto Sans Bengali', sans-serif; -webkit-text-size-adjust: 100%; }
+body.cropping { overflow: hidden; }
+main { max-width: 520px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom)); }
+header { display: flex; align-items: center; gap: 10px; margin: 6px 0 14px; }
+.logo { width: 17px; height: 25px; flex: none; }
+.logo .on { fill: var(--accent); }
+.logo .off { fill: none; stroke: var(--muted); stroke-width: 1.3; }
+h1 { font-size: 1.25rem; margin: 0; letter-spacing: -0.01em; }
+.conn { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 0.8rem; font-weight: 600; color: var(--muted); padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); white-space: nowrap; }
+.conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.conn[data-ok="yes"] { color: var(--ok); }
+.conn[data-ok="yes"] i { background: var(--ok); }
+.conn[data-ok="no"] { color: var(--bad); }
+.conn[data-ok="no"] i { background: var(--bad); }
+.lead { color: var(--muted); margin: 0 0 18px; font-size: 0.95rem; }
+.big { position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 62px; border-radius: 16px; font: inherit; font-size: 1.1rem; font-weight: 650; border: 1px solid var(--line); background: var(--panel); color: var(--text); margin: 0 0 12px; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
+.big.primary { background: var(--accent); color: var(--ink); border-color: transparent; min-height: 104px; font-size: 1.3rem; box-shadow: 0 10px 30px -14px rgba(240, 169, 58, 0.7); }
+.big svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.big.primary svg { width: 34px; height: 34px; }
+.big input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.big:active { transform: scale(0.985); }
+.big:focus-within, .big:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.big.send-all { min-height: 54px; border: 2px solid var(--accent); color: var(--text); margin-top: 6px; }
+#list { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 10px; }
+#list li { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+#list li[data-state="ready"] { border-color: var(--accent); }
+#list img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; background: var(--line); display: block; }
+#list img.tap { cursor: pointer; }
+.t { min-width: 0; }
+.s { font-size: 0.92rem; font-weight: 600; }
+.s[data-tone="ok"] { color: var(--ok); }
+.s[data-tone="bad"] { color: var(--bad); font-weight: 500; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 6px; }
+.bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 150ms linear; }
+.acts { grid-column: 1 / -1; display: flex; gap: 8px; }
+.acts button { flex: 1; min-height: 44px; font: inherit; font-size: 0.95rem; font-weight: 650; padding: 0 10px; border-radius: 11px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.acts .send, .acts .retry { flex: 1.5; background: var(--accent); color: var(--ink); border-color: transparent; }
+.acts .remove { color: var(--bad); }
+.acts button:active { transform: scale(0.97); }
+.acts button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tips { color: var(--muted); font-size: 0.86rem; margin: 22px 0 0; border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* crop: always dark, like a photo editor */
+.crop { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: #0b0d10; color: #fff; }
+.crop-top { display: flex; align-items: baseline; gap: 10px; padding: max(12px, env(safe-area-inset-top)) 16px 8px; }
+.crop-top strong { font-size: 1.05rem; }
+.crop-top span { color: #aab3bd; font-size: 0.85rem; }
+.crop-stage { position: relative; flex: 1; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.crop-stage img { position: absolute; max-width: none; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.crop-box { position: absolute; border: 1.5px solid #fff; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.58); cursor: move; touch-action: none; }
+.crop-box .grid, .crop-box .grid::before, .crop-box .grid::after { position: absolute; pointer-events: none; }
+.crop-box .grid { inset: 0; }
+.crop-box .grid::before, .crop-box .grid::after { content: ''; border: 0 solid rgba(255, 255, 255, 0.38); }
+.crop-box .grid::before { left: 33.333%; right: 33.333%; top: 0; bottom: 0; border-left-width: 1px; border-right-width: 1px; }
+.crop-box .grid::after { top: 33.333%; bottom: 33.333%; left: 0; right: 0; border-top-width: 1px; border-bottom-width: 1px; }
+.h { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; z-index: 2; touch-action: none; }
+.h[data-h="n"], .h[data-h="e"], .h[data-h="s"], .h[data-h="w"] { z-index: 1; }
+.h[data-h="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+.h[data-h="n"] { left: 50%; top: 0; cursor: ns-resize; }
+.h[data-h="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+.h[data-h="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+.h[data-h="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+.h[data-h="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+.h[data-h="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+.h[data-h="w"] { left: 0; top: 50%; cursor: ew-resize; }
+.h::before { content: ''; position: absolute; border: 0 solid #fff; }
+.h[data-h="nw"]::before { left: 19px; top: 19px; width: 20px; height: 20px; border-width: 4px 0 0 4px; }
+.h[data-h="ne"]::before { right: 19px; top: 19px; width: 20px; height: 20px; border-width: 4px 4px 0 0; }
+.h[data-h="se"]::before { right: 19px; bottom: 19px; width: 20px; height: 20px; border-width: 0 4px 4px 0; }
+.h[data-h="sw"]::before { left: 19px; bottom: 19px; width: 20px; height: 20px; border-width: 0 0 4px 4px; }
+.h[data-h="n"]::before { left: 10px; top: 19px; width: 24px; border-top-width: 4px; }
+.h[data-h="s"]::before { left: 10px; bottom: 19px; width: 24px; border-bottom-width: 4px; }
+.h[data-h="e"]::before { top: 10px; right: 19px; height: 24px; border-right-width: 4px; }
+.h[data-h="w"]::before { top: 10px; left: 19px; height: 24px; border-left-width: 4px; }
+.crop-bar { display: flex; gap: 10px; padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
+.crop-bar button { flex: 1; min-height: 50px; font: inherit; font-weight: 650; border-radius: 14px; border: 1px solid #3a424b; background: #1c2126; color: #fff; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.crop-bar .primary { flex: 1.4; background: #f0a93a; color: #1c1200; border-color: transparent; }
+.crop-bar button:focus-visible { outline: 3px solid #f0a93a; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg class="logo" viewBox="0 0 18 26" aria-hidden="true">
+      <circle class="on" cx="4.5" cy="4.5" r="3.2"/><circle class="on" cx="13.5" cy="4.5" r="3.2"/>
+      <circle class="off" cx="4.5" cy="13" r="3"/><circle class="on" cx="13.5" cy="13" r="3.2"/>
+      <circle class="off" cx="4.5" cy="21.5" r="3"/><circle class="off" cx="13.5" cy="21.5" r="3"/>
+    </svg>
+    <h1>DotSense</h1>
+    <span class="conn" id="conn" role="status"><i></i><span id="connText">Checking…</span></span>
+  </header>
+  <p class="lead">Take a photo of the page, crop it if you need to, and send it to DotSense on your computer. Its text is read for braille.</p>
+  <label class="big primary">
+    <input id="cam" type="file" accept="image/*" capture="environment">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.3-2h5.2l1.3 2h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.4" r="3.6"/></svg>
+    Take photo
+  </label>
+  <label class="big">
+    <input id="pick" type="file" accept="image/*" multiple>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.7"/><path d="M20.5 16l-5-5-8.5 8.5"/></svg>
+    Choose from gallery
+  </label>
+  <button class="big send-all" id="sendAll" type="button" hidden>Send all photos</button>
+  <ul id="list" aria-live="polite"></ul>
+  <p class="tips">For the best reading: hold the phone straight above the page, let the page fill the photo, and use good light without shadows. Crop away anything around the text.</p>
+</main>
+
+<div class="crop" id="crop" role="dialog" aria-modal="true" aria-labelledby="cropTitle" hidden>
+  <div class="crop-top"><strong id="cropTitle">Crop</strong><span>Drag the corners or edges. Drag inside to move.</span></div>
+  <div class="crop-stage" id="cropStage">
+    <img id="cropImg" alt="" draggable="false">
+    <div class="crop-box" id="cropBox" aria-label="Crop frame">
+      <i class="grid"></i>
+      <span class="h" data-h="nw"></span><span class="h" data-h="n"></span><span class="h" data-h="ne"></span><span class="h" data-h="e"></span>
+      <span class="h" data-h="se"></span><span class="h" data-h="s"></span><span class="h" data-h="sw"></span><span class="h" data-h="w"></span>
+    </div>
+  </div>
+  <div class="crop-bar">
+    <button type="button" id="cropCancel">Cancel</button>
+    <button type="button" id="cropReset">Reset</button>
+    <button type="button" class="primary" id="cropDone">Done</button>
+  </div>
+</div>
+
+<script nonce="__NONCE__">
+(() => {
+  'use strict';
+  const base = location.pathname.replace(/\/+$/, '');
+  const $ = id => document.getElementById(id);
+  // A photo goes to the PC as it is - the same file Scan (OCR) would read, the same OCR. Only a
+  // crop, or a photo the PC cannot read (HEIC...), is drawn again: at full size (phones draw at most
+  // about 16 megapixels), as a fine JPEG.
+  const MAX_PIXELS = 16000000;
+  const MAX_BYTES = 20 * 1024 * 1024;   // the largest image Scan (OCR) reads
+  const MIN_CROP = 64;     // the smallest crop frame on the screen (px): room for the handles
+  const items = [];        // the photos on this page, in the order they were taken
+  const queue = [];
+  let sending = false;
+  let misses = 0;
+
+  const OLD_LINK = 'This link is old. Scan the QR code on the PC again.';
+  function setConn(ok, text) {
+    $('conn').dataset.ok = ok ? 'yes' : 'no';
+    $('connText').textContent = text || (ok ? 'Connected to PC' : 'PC not reachable');
+  }
+  async function ping() {
+    try {
+      const r = await fetch(base + '/ping', { cache: 'no-store' });
+      if (r.status === 404) { misses = 0; setConn(false, 'Old link'); return; }
+      if (!r.ok) throw new Error(String(r.status));
+      misses = 0;
+      setConn(true);
+    } catch (_) {
+      if (++misses >= 2 || !$('conn').dataset.ok) setConn(false);
+    }
+  }
+  ping();
+  setInterval(() => { if (!document.hidden) ping(); }, 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
+
+  // Draws (part of) a decoded, upright image as a JPEG: full size (at most MAX_PIXELS), quality 0.95
+  // like the PC uses when it turns a photo upright, smaller only when it would pass MAX_BYTES.
+  async function toJpeg(img, r) {
+    let k = Math.min(1, Math.sqrt(MAX_PIXELS / (r.w * r.h)));
+    for (let tries = 0; tries < 4; tries++, k *= 0.8) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(r.w * k));
+      canvas.height = Math.max(1, Math.round(r.h * k));
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95));
+      canvas.width = canvas.height = 0;
+      if (!blob || blob.size <= 1000) return null;
+      if (blob.size <= MAX_BYTES) return blob;
+    }
+    return null;
+  }
+  // JPEG, PNG, WebP or BMP, by the first bytes: the formats the PC reads
+  async function readable(file) {
+    try {
+      const b = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+      const s = (i, n) => String.fromCharCode(...b.slice(i, i + n));
+      return (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) || s(1, 3) === 'PNG' || (s(0, 4) === 'RIFF' && s(8, 4) === 'WEBP') || s(0, 2) === 'BM';
+    } catch (_) { return false; }
+  }
+  // The photo itself when the PC can read it (its rotation note goes with it; the PC turns it upright,
+  // like Scan). Otherwise (HEIC...) it is drawn upright as a JPEG.
+  async function prepare(file) {
+    if (file.size <= MAX_BYTES && await readable(file)) return file;
+    let url = '';
+    try {
+      url = URL.createObjectURL(file);
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if (!w || !h) return file;
+      return (await toJpeg(img, { x: 0, y: 0, w, h })) || file;
+    } catch (_) {
+      return file;   // send it as it is; the computer checks it
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+    }
+  }
+
+  function button(text, cls, onclick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls;
+    b.textContent = text;
+    b.onclick = onclick;
+    return b;
+  }
+
+  // A photo waits here (Send, Crop, Remove) until it is sent.
+  function add(file) {
+    const li = document.createElement('li');
+    const img = document.createElement('img');
+    img.alt = 'Photo';
+    const t = document.createElement('div');
+    t.className = 't';
+    const s = document.createElement('div');
+    s.className = 's';
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    const fill = document.createElement('span');
+    bar.append(fill);
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+    t.append(s, bar);
+    li.append(img, t, acts);
+    const item = { orig: file, file, rect: null, cropped: false, state: 'ready', li, img, t, s, bar, fill, acts, thumb: '' };
+    setThumb(item, file);
+    img.onclick = () => { if (item.state === 'ready') openCrop(item); };
+    items.push(item);
+    $('list').prepend(li);
+    render(item);
+  }
+
+  function setThumb(item, blob) {
+    if (item.thumb) URL.revokeObjectURL(item.thumb);
+    item.thumb = URL.createObjectURL(blob);
+    item.img.src = item.thumb;
+  }
+
+  function show(item, tone, text) {
+    item.s.textContent = text;
+    item.s.dataset.tone = tone;
+  }
+
+  // states: ready (waits here) -> queued -> sending -> sent, or failed (Try again / Remove)
+  function render(item) {
+    const st = item.state;
+    item.li.dataset.state = st;
+    item.bar.hidden = st !== 'queued' && st !== 'sending';
+    if (st === 'ready') show(item, '', item.cropped ? 'Cropped · ready to send' : 'Ready to send');
+    if (st === 'queued') { item.fill.style.width = '0'; show(item, '', 'Waiting…'); }
+    const acts = [];
+    if (st === 'ready') acts.push(button('Send', 'send', () => send([item])), button('Crop', 'crop-btn', () => openCrop(item)), button('Remove', 'remove', () => remove(item)));
+    if (st === 'failed') acts.push(button('Try again', 'retry', () => send([item])), button('Remove', 'remove', () => remove(item)));
+    item.acts.replaceChildren(...acts);
+    item.acts.hidden = !acts.length;
+    item.img.classList.toggle('tap', st === 'ready');
+    item.img.title = st === 'ready' ? 'Tap to crop' : '';
+    const ready = items.filter(i => i.state === 'ready').length;
+    $('sendAll').hidden = ready < 2;
+    $('sendAll').textContent = `Send all ${ready} photos`;
+  }
+
+  function send(list) {
+    for (const item of list) {
+      if (item.state !== 'ready' && item.state !== 'failed') continue;
+      item.state = 'queued';
+      render(item);
+      queue.push(item);
+    }
+    pump();
+  }
+  $('sendAll').onclick = () => send(items.filter(i => i.state === 'ready'));
+
+  function remove(item) {
+    if (item.state !== 'ready' && item.state !== 'failed') return;
+    const near = item.li.nextElementSibling || item.li.previousElementSibling;
+    items.splice(items.indexOf(item), 1);
+    item.li.remove();
+    if (item.thumb) URL.revokeObjectURL(item.thumb);
+    const ready = items.filter(i => i.state === 'ready').length;
+    $('sendAll').hidden = ready < 2;
+    $('sendAll').textContent = `Send all ${ready} photos`;
+    const next = near && near.querySelector('.acts button');
+    if (next) next.focus(); else $('cam').focus();
+  }
+
+  async function pump() {
+    if (sending) return;
+    const item = queue.shift();
+    if (!item) return;
+    sending = true;
+    try { await upload(item); } finally { sending = false; pump(); }
+  }
+
+  async function upload(item) {
+    item.state = 'sending';
+    render(item);
+    show(item, '', 'Preparing…');
+    const blob = item.cropped ? item.file : await prepare(item.file);   // (a crop is ready to go)
+    await new Promise(resolve => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', base + '/photo');
+      xhr.timeout = 180000;
+      xhr.setRequestHeader('Content-Type', blob.type || 'application/octet-stream');
+      xhr.upload.onprogress = e => {
+        if (!e.lengthComputable) return;
+        const pct = Math.round(100 * e.loaded / e.total);
+        item.fill.style.width = pct + '%';
+        show(item, '', 'Sending… ' + pct + '%');
+      };
+      xhr.onload = () => {
+        let error = '';
+        try { error = JSON.parse(xhr.responseText).error || ''; } catch (_) { /* not JSON */ }
+        if (xhr.status === 200) { finish(item, true, 'On your PC ✓'); setConn(true); }
+        else if (xhr.status === 404) { finish(item, false, OLD_LINK); setConn(false, 'Old link'); }
+        else finish(item, false, error || 'The PC did not take the photo (' + xhr.status + ').');
+        resolve();
+      };
+      xhr.onerror = xhr.ontimeout = () => {
+        finish(item, false, 'Could not reach the PC. Is DotSense open, and is this phone on the same WiFi as the PC?');
+        setConn(false);
+        resolve();
+      };
+      xhr.send(blob);
+    });
+  }
+
+  function finish(item, ok, text) {
+    item.state = ok ? 'sent' : 'failed';
+    render(item);
+    show(item, ok ? 'ok' : 'bad', text);
+  }
+
+  for (const id of ['cam', 'pick']) {
+    $(id).addEventListener('change', e => {
+      for (const f of e.target.files) add(f);
+      e.target.value = '';
+    });
+  }
+
+  // ---- crop: a frame over the photo; drag its corners or edges to resize it, inside it to move it.
+  // The frame is kept in the photo's own pixels, so it can be changed again later.
+  const crop = { item: null, url: '', W: 0, H: 0, r: null, s: 1, ox: 0, oy: 0, drag: null };
+
+  async function openCrop(item) {
+    if (crop.item || item.state !== 'ready') return;
+    crop.item = item;
+    crop.r = null;
+    crop.url = URL.createObjectURL(item.orig);
+    const img = $('cropImg');
+    img.src = crop.url;
+    $('crop').hidden = false;
+    document.body.classList.add('cropping');
+    history.pushState({ crop: true }, '');   // the phone's Back button closes the crop
+    try {
+      await img.decode();
+    } catch (_) {
+      closeCrop();
+      show(item, 'bad', 'This photo cannot be cropped. You can still send it.');
+      return;
+    }
+    if (crop.item !== item) return;
+    crop.W = img.naturalWidth;
+    crop.H = img.naturalHeight;
+    crop.r = item.rect ? Object.assign({}, item.rect) : { x: 0, y: 0, w: crop.W, h: crop.H };
+    placeCrop();
+    $('cropDone').focus();
+  }
+
+  function closeCrop(fromBack) {
+    if (!crop.item) return;
+    const item = crop.item;
+    crop.item = null;
+    crop.drag = null;
+    $('crop').hidden = true;
+    document.body.classList.remove('cropping');
+    $('cropImg').removeAttribute('src');
+    if (crop.url) URL.revokeObjectURL(crop.url);
+    crop.url = '';
+    if (!fromBack && history.state && history.state.crop) history.back();
+    const b = item.li.querySelector('.crop-btn');
+    if (b) b.focus();
+  }
+  window.addEventListener('popstate', () => closeCrop(true));
+
+  // the photo fitted into the stage, and the frame on it
+  function placeCrop() {
+    if (!crop.r) return;
+    const st = $('cropStage').getBoundingClientRect();
+    const pad = 22;
+    crop.s = Math.max(0.0001, Math.min((st.width - 2 * pad) / crop.W, (st.height - 2 * pad) / crop.H));
+    const w = crop.W * crop.s, h = crop.H * crop.s;
+    crop.ox = (st.width - w) / 2;
+    crop.oy = (st.height - h) / 2;
+    Object.assign($('cropImg').style, { left: crop.ox + 'px', top: crop.oy + 'px', width: w + 'px', height: h + 'px' });
+    drawFrame();
+  }
+  function drawFrame() {
+    const r = crop.r, s = crop.s;
+    Object.assign($('cropBox').style, { left: crop.ox + r.x * s + 'px', top: crop.oy + r.y * s + 'px', width: r.w * s + 'px', height: r.h * s + 'px' });
+  }
+  window.addEventListener('resize', () => { if (crop.item) placeCrop(); });
+
+  // the frame after dragging `mode` (a handle nw, n, ne, e, se, s, sw, w, or move) by dx, dy photo pixels
+  function dragFrame(r0, mode, dx, dy) {
+    const W = crop.W, H = crop.H;
+    if (mode === 'move') {
+      return { x: Math.min(Math.max(0, r0.x + dx), W - r0.w), y: Math.min(Math.max(0, r0.y + dy), H - r0.h), w: r0.w, h: r0.h };
+    }
+    const minW = Math.min(W, MIN_CROP / crop.s), minH = Math.min(H, MIN_CROP / crop.s);
+    let left = r0.x, top = r0.y, right = r0.x + r0.w, bottom = r0.y + r0.h;
+    if (mode.includes('w')) left = Math.min(Math.max(0, left + dx), right - minW);
+    if (mode.includes('e')) right = Math.max(Math.min(W, right + dx), left + minW);
+    if (mode.includes('n')) top = Math.min(Math.max(0, top + dy), bottom - minH);
+    if (mode.includes('s')) bottom = Math.max(Math.min(H, bottom + dy), top + minH);
+    return { x: left, y: top, w: right - left, h: bottom - top };
+  }
+
+  const stage = $('cropStage');
+  stage.addEventListener('pointerdown', e => {
+    if (!crop.r || crop.drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const h = e.target.dataset ? e.target.dataset.h : '';
+    if (!h && !$('cropBox').contains(e.target)) return;
+    e.preventDefault();
+    crop.drag = { id: e.pointerId, mode: h || 'move', x: e.clientX, y: e.clientY, r0: Object.assign({}, crop.r) };
+    try { stage.setPointerCapture(e.pointerId); } catch (_) { /* the pointer is gone already */ }
+  });
+  stage.addEventListener('pointermove', e => {
+    const d = crop.drag;
+    if (!d || e.pointerId !== d.id) return;
+    e.preventDefault();
+    crop.r = dragFrame(d.r0, d.mode, (e.clientX - d.x) / crop.s, (e.clientY - d.y) / crop.s);
+    drawFrame();
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    stage.addEventListener(type, e => { if (crop.drag && e.pointerId === crop.drag.id) crop.drag = null; });
+  }
+
+  $('cropCancel').onclick = () => closeCrop();
+  $('cropReset').onclick = () => {
+    if (!crop.r) return;
+    crop.r = { x: 0, y: 0, w: crop.W, h: crop.H };
+    drawFrame();
+  };
+  $('cropDone').onclick = async () => {
+    const item = crop.item, r = crop.r;
+    if (!item || !r) return;
+    const rect = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) };
+    const whole = rect.x <= 0 && rect.y <= 0 && rect.w >= crop.W && rect.h >= crop.H;
+    if (whole) {
+      item.rect = null;
+      item.cropped = false;
+      item.file = item.orig;
+      setThumb(item, item.orig);
+    } else {
+      $('cropDone').disabled = true;
+      let blob = null;
+      try { blob = await toJpeg($('cropImg'), rect); } catch (_) { /* below */ }
+      $('cropDone').disabled = false;
+      if (crop.item !== item) return;
+      if (!blob) { show(item, 'bad', 'The crop did not work. You can still send the photo.'); closeCrop(); return; }
+      item.rect = rect;
+      item.cropped = true;
+      item.file = blob;
+      setThumb(item, blob);
+    }
+    render(item);
+    closeCrop();   // (focus back on the new Crop button)
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && crop.item) closeCrop(); });
+})();
+</script>
+</body>
+</html>

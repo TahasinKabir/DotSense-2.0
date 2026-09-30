@@ -16,7 +16,7 @@ Made by **Team TactiCore** at United International University, Dhaka, as a CSE 4
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/dotsense-printing-dark.png">
+    <source media="(prefers-color-scheme: dark)"
     <img src="docs/images/dotsense-printing-light.png" alt="DotSense printing a page: the text on the left, the braille preview on the right with punched dots in black, and the progress bar at the bottom" width="900">
   </picture>
   <br>
